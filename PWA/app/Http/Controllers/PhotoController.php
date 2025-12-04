@@ -5,103 +5,161 @@ namespace App\Http\Controllers;
 use App\Models\Photo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Http\Controllers\Traits\ApiResponse;
 
 class PhotoController extends Controller
 {
-    // ============================
-    // GET /photos -> listar fotos
-    // ============================
+    use ApiResponse;
+
+    /**
+     * List photos. Optionally filter by `place_id`.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function index(Request $request)
     {
-        // Si quieres filtrar por place_id:
-        if ($request->has('place_id')) {
-            return Photo::where('place_id', $request->place_id)->get();
-        }
+        try {
+            if ($request->has('place_id')) {
+                $photos = Photo::where('place_id', $request->place_id)->get();
+            } else {
+                $photos = Photo::all();
+            }
 
-        return Photo::all();
+            return $this->success($photos);
+        } catch (\Exception $e) {
+            return $this->error('Failed to list photos', $e->getMessage(), 500);
+        }
     }
 
-    // ============================
-    // POST /photos -> subir foto
-    // ============================
+    /**
+     * Store a new photo for a place.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'place_id' => 'required|exists:places,id',
-            'photo' => 'required|image'
-        ]);
+        try {
+            $data = $request->validate([
+                'place_id' => 'required|exists:places,id',
+                'photo' => 'required|image|max:10240'
+            ]);
 
-        $path = $request->file('photo')->store('places', 'public');
+            $path = $request->file('photo')->store('places', 'public');
 
-        return Photo::create([
-            'place_id' => $data['place_id'],
-            'user_id' => $request->user()->id,
-            'url' => $path
-        ]);
+            $photo = Photo::create([
+                'place_id' => $data['place_id'],
+                'user_id' => $request->user()->id,
+                'url' => $path
+            ]);
+
+            return $this->success($photo, 'Photo uploaded', 201);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return $this->error('Validation failed', $ve->errors(), 422);
+        } catch (\Exception $e) {
+            return $this->error('Failed to upload photo', $e->getMessage(), 500);
+        }
     }
 
-    // ============================
-    // GET /photos/{id}
-    // ============================
+    /**
+     * Show a photo.
+     *
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function show($id)
     {
-        $photo = Photo::find($id);
+        try {
+            $photo = Photo::find($id);
 
-        if (!$photo) {
-            return response()->json(['message' => 'Photo not found'], 404);
+            if (!$photo) {
+                return $this->error('Photo not found', null, 404);
+            }
+
+            return $this->success($photo);
+        } catch (\Exception $e) {
+            return $this->error('Failed to retrieve photo', $e->getMessage(), 500);
         }
-
-        return $photo;
     }
 
-    // ============================
-    // PUT /photos/{id} -> actualizar foto
-    // ============================
+    /**
+     * Update a photo (replace file). Only owner or admins can update.
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function update(Request $request, $id)
     {
-        $photo = Photo::find($id);
+        try {
+            $photo = Photo::find($id);
 
-        if (!$photo) {
-            return response()->json(['message' => 'Photo not found'], 404);
+            if (!$photo) {
+                return $this->error('Photo not found', null, 404);
+            }
+
+            $user = $request->user();
+            if ($photo->user_id !== $user->id && !method_exists($user, 'hasRole')) {
+                // if there's no role system yet, disallow
+                return $this->error('Forbidden', null, 403);
+            }
+
+            if ($photo->user_id !== $user->id && !$user->hasRole('admin')) {
+                return $this->error('Forbidden', null, 403);
+            }
+
+            $data = $request->validate([
+                'photo' => 'required|image|max:10240'
+            ]);
+
+            if (Storage::disk('public')->exists($photo->url)) {
+                Storage::disk('public')->delete($photo->url);
+            }
+
+            $path = $request->file('photo')->store('places', 'public');
+
+            $photo->update([
+                'url' => $path
+            ]);
+
+            return $this->success($photo, 'Photo updated');
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return $this->error('Validation failed', $ve->errors(), 422);
+        } catch (\Exception $e) {
+            return $this->error('Failed to update photo', $e->getMessage(), 500);
         }
-
-        $data = $request->validate([
-            'photo' => 'required|image'
-        ]);
-
-        // Borrar imagen vieja
-        if (Storage::disk('public')->exists($photo->url)) {
-            Storage::disk('public')->delete($photo->url);
-        }
-
-        // Subir nueva
-        $path = $request->file('photo')->store('places', 'public');
-
-        $photo->update([
-            'url' => $path
-        ]);
-
-        return $photo;
     }
 
-    // ============================
-    // DELETE /photos/{id}
-    // ============================
+    /**
+     * Delete a photo (soft delete + remove file). Only owner or admin.
+     *
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function destroy($id)
     {
-        $photo = Photo::find($id);
+        try {
+            $photo = Photo::find($id);
 
-        if (!$photo) {
-            return response()->json(['message' => 'Photo not found'], 404);
+            if (!$photo) {
+                return $this->error('Photo not found', null, 404);
+            }
+
+            $user = request()->user();
+            if ($photo->user_id !== $user->id && !$user->hasRole('admin')) {
+                return $this->error('Forbidden', null, 403);
+            }
+
+            if (Storage::disk('public')->exists($photo->url)) {
+                Storage::disk('public')->delete($photo->url);
+            }
+
+            $photo->delete();
+
+            return $this->success(null, 'Photo deleted');
+        } catch (\Exception $e) {
+            return $this->error('Failed to delete photo', $e->getMessage(), 500);
         }
-
-        // borrar archivo físico
-        if (Storage::disk('public')->exists($photo->url)) {
-            Storage::disk('public')->delete($photo->url);
-        }
-
-        $photo->delete();
-
-        return response()->json(['message' => 'Photo deleted']);
     }
 }

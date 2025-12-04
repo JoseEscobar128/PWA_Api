@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-    use HasFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Photo extends Model
 {
-
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'place_id', 'user_id', 'url', 'description'

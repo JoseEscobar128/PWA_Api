@@ -19,11 +19,9 @@ class AuthController extends Controller
         ]);
 
         $data['password'] = Hash::make($data['password']);
-
         $user = User::create($data);
 
         $token = $user->createToken('auth_token')->plainTextToken;
-
         return response()->json([
             'user' => $user,
             'token' => $token
@@ -38,15 +36,14 @@ class AuthController extends Controller
         ]);
 
         $user = User::where('email', $data['email'])->first();
-
-        if (!$user || !Hash::check($data['password'], $user->password)) {
+        if ("/Users/joseescobar/Documents/UTT/2025/10_cuatri_Ing/Movil/PWA/PWA/app/Http/Controllers/Api/AuthController.php"user || !Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'Credenciales incorrectas'], 401);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
-
         return response()->json([
             'message' => 'Login correcto',
+            'user' => $user,
             'token' => $token
         ]);
     }
@@ -56,5 +53,10 @@ class AuthController extends Controller
         $request->user()->tokens()->delete();
 
         return response()->json(['message' => 'Sesión cerrada']);
+    }
+
+    public function me(Request $request)
+    {
+        return response()->json($request->user());
     }
 }

@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-  use HasFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PlaceVote extends Model
 {
+        use HasFactory, SoftDeletes;
 
-    protected $fillable = ['place_id', 'user_id'];
+        protected $fillable = ['place_id', 'user_id'];
 
     public function place()
     {

@@ -4,61 +4,99 @@ namespace App\Http\Controllers;
 
 use App\Models\PlaceVote;
 use Illuminate\Http\Request;
+use App\Http\Controllers\Traits\ApiResponse;
 
 class PlaceVoteController extends Controller
 {
-    // Listar votos de un lugar (opcional)
+    use ApiResponse;
+
+    /**
+     * List votes for a place (optional `place_id`).
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function index(Request $request)
     {
-        $placeId = $request->query('place_id');
+        try {
+            $placeId = $request->query('place_id');
 
-        $votes = PlaceVote::where('place_id', $placeId)->get();
+            $votes = PlaceVote::when($placeId, function ($q, $placeId) {
+                return $q->where('place_id', $placeId);
+            })->get();
 
-        return response()->json($votes);
+            return $this->success($votes);
+        } catch (\Exception $e) {
+            return $this->error('Failed to list votes', $e->getMessage(), 500);
+        }
     }
 
-    // Crear voto
+    /**
+     * Create a vote (one per user/place).
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'place_id' => 'required|exists:places,id',
-        ]);
+        try {
+            $data = $request->validate([
+                'place_id' => 'required|exists:places,id',
+            ]);
 
-        $vote = PlaceVote::firstOrCreate([
-            'place_id' => $data['place_id'],
-            'user_id' => $request->user()->id,
-        ]);
+            $vote = PlaceVote::firstOrCreate([
+                'place_id' => $data['place_id'],
+                'user_id' => $request->user()->id,
+            ]);
 
-        return response()->json([
-            'message' => 'Voted successfully',
-            'data' => $vote
-        ], 201);
+            return $this->success($vote, 'Voted successfully', 201);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return $this->error('Validation failed', $ve->errors(), 422);
+        } catch (\Exception $e) {
+            return $this->error('Failed to vote', $e->getMessage(), 500);
+        }
     }
 
-    // Mostrar si el usuario ya votó
+    /**
+     * Show whether the authenticated user has voted for the given place.
+     *
+     * @param int $place_id
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function show($place_id, Request $request)
     {
-        $vote = PlaceVote::where('place_id', $place_id)
-            ->where('user_id', $request->user()->id)
-            ->first();
+        try {
+            $vote = PlaceVote::where('place_id', $place_id)
+                ->where('user_id', $request->user()->id)
+                ->first();
 
-        return response()->json([
-            'voted' => $vote ? true : false,
-            'data' => $vote
-        ]);
+            return $this->success([
+                'voted' => (bool) $vote,
+                'data' => $vote
+            ]);
+        } catch (\Exception $e) {
+            return $this->error('Failed to check vote', $e->getMessage(), 500);
+        }
     }
 
-    // Quitar voto
-    public function destroy(Request $request)
+    /**
+     * Remove authenticated user's vote for a place.
+     *
+     * @param int $place_id
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function destroy($place_id, Request $request)
     {
-        $request->validate([
-            'place_id' => 'required|exists:places,id'
-        ]);
+        try {
+            PlaceVote::where('place_id', $place_id)
+                ->where('user_id', $request->user()->id)
+                ->delete();
 
-        PlaceVote::where('place_id', $request->place_id)
-            ->where('user_id', $request->user()->id)
-            ->delete();
-
-        return response()->json(['message' => 'Vote removed']);
+            return $this->success(null, 'Vote removed');
+        } catch (\Exception $e) {
+            return $this->error('Failed to remove vote', $e->getMessage(), 500);
+        }
     }
 }
