@@ -42,9 +42,14 @@ class PhotoController extends Controller
     {
         try {
             $data = $request->validate([
-                'place_id' => 'required|exists:places,id',
+                'place_id' => 'required|integer',
                 'photo' => 'required|image|max:10240'
             ]);
+
+            // Verificar que el lugar existe sin eager load
+            if (!$placeExists = \DB::table('places')->where('id', $data['place_id'])->exists()) {
+                return $this->error('Validation failed', ['place_id' => ['The selected place does not exist.']], 422);
+            }
 
             $path = $request->file('photo')->store('places', 'public');
 

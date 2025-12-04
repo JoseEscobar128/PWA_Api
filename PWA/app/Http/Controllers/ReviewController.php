@@ -42,6 +42,7 @@ class ReviewController extends Controller
             $data['user_id'] = $request->user()->id;
 
             $review = Review::create($data);
+            $review->load('user');
 
             return $this->success($review, 'Review created', 201);
         } catch (\Illuminate\Validation\ValidationException $ve) {
