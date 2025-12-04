@@ -36,7 +36,7 @@ class AuthController extends Controller
         ]);
 
         $user = User::where('email', $data['email'])->first();
-        if ("/Users/joseescobar/Documents/UTT/2025/10_cuatri_Ing/Movil/PWA/PWA/app/Http/Controllers/Api/AuthController.php"user || !Hash::check($data['password'], $user->password)) {
+        if (!$user || !Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'Credenciales incorrectas'], 401);
         }
 

@@ -18,7 +18,7 @@ class PlaceController extends Controller
     public function index()
     {
         try {
-            $places = Place::with(['photos', 'reviews', 'votes'])->get();
+            $places = Place::with(['photos', 'votes'])->get();
             return $this->success($places);
         } catch (\Exception $e) {
             return $this->error('Failed to list places', $e->getMessage(), 500);
@@ -64,7 +64,7 @@ class PlaceController extends Controller
     public function show(Place $place)
     {
         try {
-            $place->load(['photos', 'reviews', 'votes']);
+            $place->load(['photos', 'votes', 'reviews.user']);
             return $this->success($place);
         } catch (\Exception $e) {
             return $this->error('Failed to retrieve place', $e->getMessage(), 500);

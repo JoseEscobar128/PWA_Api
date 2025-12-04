@@ -17,6 +17,8 @@ class Review extends Model
         'comment'
     ];
 
+    protected $hidden = ['place']; // Prevenir serialización circular
+
     public function place()
     {
         return $this->belongsTo(Place::class);

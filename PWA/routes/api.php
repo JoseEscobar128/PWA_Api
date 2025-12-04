@@ -15,16 +15,19 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 */
 
-// Users management — only admins
-Route::middleware(['auth:sanctum','role:admin'])->group(function () {
-    Route::apiResource('users', UserController::class);
-});
-
 // AUTH
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::get('/me', [AuthController::class, 'me'])->middleware('auth:sanctum');
+
+// User profile update — any authenticated user can update their own profile
+Route::middleware('auth:sanctum')->put('/users/{id}', [UserController::class, 'update']);
+
+// Users management — only admins can view/create/delete
+Route::middleware(['auth:sanctum','role:admin'])->group(function () {
+    Route::apiResource('users', UserController::class, ['only' => ['index', 'store', 'show', 'destroy']]);
+});
 
 
 

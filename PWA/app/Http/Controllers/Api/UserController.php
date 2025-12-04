@@ -42,22 +42,28 @@ class UserController extends Controller
     // PUT /api/users/{id}
     public function update(Request $request, $id)
     {
-        $user = User::findOrFail($id);
+        try {
+            $user = User::findOrFail($id);
 
-        $validated = $request->validate([
-            'name'      => 'string',
-            'last_name' => 'string',
-            'email'     => 'email|unique:users,email,' . $user->id,
-            'password'  => 'nullable|min:6',
-        ]);
+            $validated = $request->validate([
+                'name'      => 'string',
+                'last_name' => 'string',
+                'email'     => 'email|unique:users,email,' . $user->id,
+                'password'  => 'nullable|min:6',
+            ]);
 
-        if (isset($validated['password'])) {
-            $validated['password'] = Hash::make($validated['password']);
+            if (isset($validated['password'])) {
+                $validated['password'] = Hash::make($validated['password']);
+            }
+
+            $user->update($validated);
+
+            return response()->json(['success' => true, 'data' => $user], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['success' => false, 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-
-        $user->update($validated);
-
-        return response()->json($user, 200);
     }
 
     // DELETE /api/users/{id}

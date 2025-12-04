@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Place;
 use App\Models\PlaceVote;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Traits\ApiResponse;
@@ -40,19 +41,48 @@ class PlaceVoteController extends Controller
     public function store(Request $request)
     {
         try {
-            $data = $request->validate([
-                'place_id' => 'required|exists:places,id',
-            ]);
+            $placeId = $request->input('place_id');
+            $userId = $request->user()->id;
 
-            $vote = PlaceVote::firstOrCreate([
-                'place_id' => $data['place_id'],
-                'user_id' => $request->user()->id,
-            ]);
+            // Validate place exists
+            if (!$placeId || !Place::where('id', $placeId)->exists()) {
+                return $this->error('Validation failed', ['place_id' => ['The selected place does not exist.']], 422);
+            }
 
-            return $this->success($vote, 'Voted successfully', 201);
-        } catch (\Illuminate\Validation\ValidationException $ve) {
-            return $this->error('Validation failed', $ve->errors(), 422);
+            // Check if vote exists (including soft deleted ones)
+            $existingVote = PlaceVote::withTrashed()
+                ->where('place_id', $placeId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if ($existingVote) {
+                // If it's soft deleted, restore it
+                if ($existingVote->trashed()) {
+                    $existingVote->restore();
+                    $vote = $existingVote;
+                } else {
+                    // Vote already exists and is not deleted
+                    $vote = $existingVote;
+                }
+            } else {
+                // Create new vote
+                $vote = PlaceVote::create([
+                    'place_id' => $placeId,
+                    'user_id' => $userId,
+                ]);
+            }
+
+            // Return a simple response without relationships to avoid slow serialization
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $vote->id,
+                    'place_id' => $vote->place_id,
+                    'user_id' => $vote->user_id,
+                ]
+            ], 201);
         } catch (\Exception $e) {
+            \Log::error('Vote creation error: ' . $e->getMessage());
             return $this->error('Failed to vote', $e->getMessage(), 500);
         }
     }
@@ -94,7 +124,10 @@ class PlaceVoteController extends Controller
                 ->where('user_id', $request->user()->id)
                 ->delete();
 
-            return $this->success(null, 'Vote removed');
+            return response()->json([
+                'success' => true,
+                'message' => 'Vote removed'
+            ]);
         } catch (\Exception $e) {
             return $this->error('Failed to remove vote', $e->getMessage(), 500);
         }
